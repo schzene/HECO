@@ -35,22 +35,22 @@ public:
             return failure();
         auto new_functype = FunctionType::get(getContext(), signatureConversion.getConvertedTypes(), newResultTypes);
 
-        rewriter.startRootUpdate(op);
-        op.setType(new_functype);
-        for (auto it = op.getRegion().args_begin(); it != op.getRegion().args_end(); ++it)
-        {
-            auto arg = *it;
-            auto oldType = arg.getType();
-            auto newType = typeConverter->convertType(oldType);
-            arg.setType(newType);
-            if (newType != oldType)
+        rewriter.modifyOpInPlace(op, [&]() {
+            op.setType(new_functype);
+            for (auto it = op.getRegion().args_begin(); it != op.getRegion().args_end(); ++it)
             {
-                rewriter.setInsertionPointToStart(&op.getBody().getBlocks().front());
-                auto m_op = typeConverter->materializeSourceConversion(rewriter, arg.getLoc(), oldType, arg);
-                arg.replaceAllUsesExcept(m_op, m_op.getDefiningOp());
+                auto arg = *it;
+                auto oldType = arg.getType();
+                auto newType = typeConverter->convertType(oldType);
+                arg.setType(newType);
+                if (newType != oldType)
+                {
+                    rewriter.setInsertionPointToStart(&op.getBody().getBlocks().front());
+                    auto m_op = typeConverter->materializeSourceConversion(rewriter, arg.getLoc(), oldType, arg);
+                    arg.replaceAllUsesExcept(m_op, m_op.getDefiningOp());
+                }
             }
-        }
-        rewriter.finalizeRootUpdate(op);
+        });
 
         return success();
     }
@@ -89,7 +89,7 @@ public:
                                 0), // means "first operand"
                             rewriter.getSI32IntegerAttr(op.getI()) });
 
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator.rotate"), aa, ArrayAttr(), ValueRange(x));
 
         return success();
@@ -174,7 +174,7 @@ public:
         }
 
         auto aa = ArrayAttr::get(getContext(), params);
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, dstType, llvm::StringRef("evaluator.combine"), aa,
             ArrayAttr(), // no template args
             new_operands);
@@ -232,7 +232,7 @@ public:
         if (op.getNumOperands() > 2)
             op_str = op_str + "_many";
 
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator." + op_str), ArrayAttr(), ArrayAttr(),
             materialized_operands);
 

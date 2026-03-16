@@ -57,7 +57,7 @@ public:
                                 0), // means "first operand"
                             rewriter.getSI32IntegerAttr(op.getOffset()) });
 
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator_rotate"), aa, ArrayAttr(), materialized_operands);
 
         return success();
@@ -100,7 +100,7 @@ public:
 
         // build a series of calls to our custom evaluator wrapper (for now, because it's faster than dealing with
         // seal's API)
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator_relinearize"), ArrayAttr(), ArrayAttr(),
             materialized_operands);
 
@@ -141,7 +141,7 @@ public:
 
         // build a series of calls to our custom evaluator wrapper (for now, because it's faster than dealing with
         // seal's API)
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator_encode"), ArrayAttr(), ArrayAttr(),
             materialized_operands);
 
@@ -182,7 +182,7 @@ public:
 
         // build a series of calls to our custom evaluator wrapper (for now, because it's faster than dealing with
         // seal's API)
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator_decode"), ArrayAttr(), ArrayAttr(),
             materialized_operands);
 
@@ -291,7 +291,7 @@ public:
         {
             auto template_array = ArrayAttr::get(
                 rewriter.getContext(), { emitc::OpaqueAttr::get(rewriter.getContext(), "seal::Ciphertext") });
-            emitc::CallOp v = rewriter.create<emitc::CallOp>(
+            emitc::CallOpaqueOp v = rewriter.create<emitc::CallOpaqueOp>(
                 op.getLoc(), TypeRange(emitc::OpaqueType::get(rewriter.getContext(), "std::vector<seal::Ciphertext>")),
                 llvm::StringRef("std::vector"), ArrayAttr(), template_array, ValueRange());
 
@@ -299,27 +299,27 @@ public:
                 std::is_same<OpType, bfv::AddManyOp>() ? op->getNumOperands() : op->getNumOperands() - 1;
             for (size_t i = 0; i < num_operands; ++i)
             {
-                rewriter.create<emitc::CallOp>(
+                rewriter.create<emitc::CallOpaqueOp>(
                     op.getLoc(), TypeRange(), llvm::StringRef("insert"), ArrayAttr(), ArrayAttr(),
                     ValueRange({ v.getResult(0), materialized_operands[i] }));
             }
 
             if (std::is_same<OpType, bfv::AddManyOp>())
             {
-                rewriter.replaceOpWithNewOp<emitc::CallOp>(
+                rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
                     op, TypeRange(dstType), llvm::StringRef("evaluator_" + op_str), ArrayAttr(), ArrayAttr(),
                     ValueRange{ (v.getResult(0)) });
             }
             else
             {
-                rewriter.replaceOpWithNewOp<emitc::CallOp>(
+                rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
                     op, TypeRange(dstType), llvm::StringRef("evaluator_" + op_str), ArrayAttr(), ArrayAttr(),
                     ValueRange{ (v.getResult(0)), materialized_operands.back() });
             }
         }
         else
         {
-            rewriter.replaceOpWithNewOp<emitc::CallOp>(
+            rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
                 op, TypeRange(dstType), llvm::StringRef("evaluator_" + op_str), ArrayAttr(), ArrayAttr(),
                 materialized_operands);
         }
@@ -369,7 +369,7 @@ public:
         else
             return failure();
 
-        rewriter.replaceOpWithNewOp<emitc::CallOp>(
+        rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
             op, TypeRange(dstType), llvm::StringRef("evaluator_" + op_str), ArrayAttr(), ArrayAttr(), operands);
 
         return success();
@@ -395,22 +395,22 @@ public:
             return failure();
         auto new_functype = FunctionType::get(getContext(), signatureConversion.getConvertedTypes(), newResultTypes);
 
-        rewriter.startRootUpdate(op);
-        op.setType(new_functype);
-        for (auto it = op.getRegion().args_begin(); it != op.getRegion().args_end(); ++it)
-        {
-            auto arg = *it;
-            auto oldType = arg.getType();
-            auto newType = typeConverter->convertType(oldType);
-            arg.setType(newType);
-            if (newType != oldType)
+        rewriter.modifyOpInPlace(op, [&]() {
+            op.setType(new_functype);
+            for (auto it = op.getRegion().args_begin(); it != op.getRegion().args_end(); ++it)
             {
-                rewriter.setInsertionPointToStart(&op.getBody().getBlocks().front());
-                auto m_op = typeConverter->materializeSourceConversion(rewriter, arg.getLoc(), oldType, arg);
-                arg.replaceAllUsesExcept(m_op, m_op.getDefiningOp());
+                auto arg = *it;
+                auto oldType = arg.getType();
+                auto newType = typeConverter->convertType(oldType);
+                arg.setType(newType);
+                if (newType != oldType)
+                {
+                    rewriter.setInsertionPointToStart(&op.getBody().getBlocks().front());
+                    auto m_op = typeConverter->materializeSourceConversion(rewriter, arg.getLoc(), oldType, arg);
+                    arg.replaceAllUsesExcept(m_op, m_op.getDefiningOp());
+                }
             }
-        }
-        rewriter.finalizeRootUpdate(op);
+        });
 
         return success();
     }

@@ -148,22 +148,22 @@ public:
             return failure();
         auto new_functype = FunctionType::get(getContext(), signatureConversion.getConvertedTypes(), newResultTypes);
 
-        rewriter.startRootUpdate(op);
-        op.setType(new_functype);
-        for (auto it = op.getRegion().args_begin(); it != op.getRegion().args_end(); ++it)
-        {
-            auto arg = *it;
-            auto oldType = arg.getType();
-            auto newType = typeConverter->convertType(oldType);
-            arg.setType(newType);
-            if (newType != oldType)
+        rewriter.modifyOpInPlace(op, [&]() {
+            op.setType(new_functype);
+            for (auto it = op.getRegion().args_begin(); it != op.getRegion().args_end(); ++it)
             {
-                rewriter.setInsertionPointToStart(&op.getBody().getBlocks().front());
-                auto m_op = typeConverter->materializeSourceConversion(rewriter, arg.getLoc(), oldType, arg);
-                arg.replaceAllUsesExcept(m_op, m_op.getDefiningOp());
+                auto arg = *it;
+                auto oldType = arg.getType();
+                auto newType = typeConverter->convertType(oldType);
+                arg.setType(newType);
+                if (newType != oldType)
+                {
+                    rewriter.setInsertionPointToStart(&op.getBody().getBlocks().front());
+                    auto m_op = typeConverter->materializeSourceConversion(rewriter, arg.getLoc(), oldType, arg);
+                    arg.replaceAllUsesExcept(m_op, m_op.getDefiningOp());
+                }
             }
-        }
-        rewriter.finalizeRootUpdate(op);
+        });
 
         return success();
     }

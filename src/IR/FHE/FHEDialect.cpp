@@ -380,13 +380,13 @@ void fhe::ConstOp::getAsmResultNames(function_ref<void(Value, StringRef)> setNam
                             // Note that we don't actually remove the first materialize and ex_op,
                             // since they'll be canonicalized away anyway as dead code if appropriate
 
-                            // rewriter.replaceOpWithNewOp<emitc::CallOp>(op, ex_op.getVector(),
+                            // rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(op, ex_op.getVector(),
                             // -ex_op.getI().getLimitedValue(INT32_MAX));
                             auto i = (int)ex_op.getI().getLimitedValue(INT32_MAX);
                             auto a0 = rewriter.getIndexAttr(0); // stands for "first operand"
                             auto a1 = rewriter.getSI32IntegerAttr(i);
                             auto aa = ArrayAttr::get(rewriter.getContext(), { a0, a1 });
-                            rewriter.replaceOpWithNewOp<emitc::CallOp>(
+                            rewriter.replaceOpWithNewOp<emitc::CallOpaqueOp>(
                                 op, TypeRange(ot), llvm::StringRef("evaluator.rotate"), aa, ArrayAttr(),
                                 ValueRange(original_source.getInput()));
                             return success();

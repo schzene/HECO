@@ -37,7 +37,12 @@ endif()
 # #####################
 # SEAL Configuration #
 # #####################
-find_package(SEAL 4.0 CONFIG) # sets SEAL_FOUND variable
+find_package(SEAL 4.1 CONFIG) # sets SEAL_FOUND variable
+
+# ########################
+# HEonGPU Configuration #
+# ########################
+
 
 # ##########################
 # MLIR/LLVM Configuration #
